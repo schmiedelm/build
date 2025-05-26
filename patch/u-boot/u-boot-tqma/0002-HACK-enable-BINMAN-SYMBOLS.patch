@@ -1,0 +1,24 @@
+From fb12af68f155f809e6ddf92dfe281607c93ac040 Mon Sep 17 00:00:00 2001
+From: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+Date: Tue, 27 May 2025 15:08:03 +0200
+Subject: [PATCH] [HACK] enable BINMAN SYMBOLS
+
+Signed-off-by: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+---
+ configs/tqma8mpxl_multi_mba8mp_ras314_defconfig | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/configs/tqma8mpxl_multi_mba8mp_ras314_defconfig b/configs/tqma8mpxl_multi_mba8mp_ras314_defconfig
+index 025774930a7..0b53aca6b3e 100644
+--- a/configs/tqma8mpxl_multi_mba8mp_ras314_defconfig
++++ b/configs/tqma8mpxl_multi_mba8mp_ras314_defconfig
+@@ -211,3 +211,5 @@ CONFIG_IMX_WATCHDOG=y
+ # CONFIG_SPL_WDT is not set
+ CONFIG_SPL_RSA=y
+ # CONFIG_EFI_LOADER is not set
++CONFIG_SPL_BINMAN_SYMBOLS=y
++CONFIG_SPL_BINMAN_UBOOT_SYMBOLS=y
+\ No newline at end of file
+-- 
+2.43.0
+
