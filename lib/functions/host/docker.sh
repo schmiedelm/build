@@ -329,6 +329,9 @@ function docker_cli_prepare_dockerfile() {
 		**/*~
 		**/*.log
 		**/.DS_Store
+
+		# Using TQ-Certificates
+		!/certificates
 	DOCKERIGNORE
 
 	#############################################################################################################
@@ -404,6 +407,9 @@ function docker_cli_prepare_dockerfile() {
 		${c}${c_req} ARMBIAN_INSIDE_DOCKERFILE_BUILD="yes" /bin/bash "${DOCKER_ARMBIAN_TARGET_PATH}/compile.sh" requirements SHOW_LOG=yes && \\
 		${c}${c_req} rm -rf "${DOCKER_ARMBIAN_TARGET_PATH}/output" "${DOCKER_ARMBIAN_TARGET_PATH}/.tmp" "${DOCKER_ARMBIAN_TARGET_PATH}/cache"
 		${docker_include_dot_git_dir}
+		${c}# Using TQ-Certificates
+		ADD certificates/* /usr/local/share/ca-certificates/
+		RUN update-ca-certificates && rm -f /usr/local/share/ca-certificates/.keepme
 	INITIAL_DOCKERFILE
 	# For debugging: RUN rm -fv /usr/bin/pip3 # Remove pip3 symlink to make sure we're not depending on it; non-Dockers may not have it
 }

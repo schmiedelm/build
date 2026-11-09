@@ -164,6 +164,18 @@ function create_new_rootfs_cache_via_debootstrap() {
 
 	mount_chroot "${SDCARD}" # we mount the chroot here... it's un-mounted below when all is done, or by cleanup handler '' @TODO
 
+	# TQ-Group fork: trust our corporate proxy's TLS-interception CA inside the
+	# chroot too. It's already trusted on the Docker build host itself (see
+	# docker_cli_prepare_dockerfile), but the target rootfs has its own, separate
+	# CA store. Without this, any HTTPS apt source behind the proxy (e.g. the
+	# public Armbian mirror) fails apt-get update with "certificate verify failed".
+	if compgen -G "${SRC}/certificates/*.crt" > /dev/null; then
+		display_alert "Installing TQ CA certificates" "into rootfs chroot" "info"
+		run_host_command_logged mkdir -pv --mode=755 "${SDCARD}/usr/local/share/ca-certificates"
+		run_host_command_logged cp -v "${SRC}"/certificates/*.crt "${SDCARD}/usr/local/share/ca-certificates/"
+		chroot_sdcard update-ca-certificates
+	fi
+
 	display_alert "Diverting" "initctl/start-stop-daemon" "info"
 	# policy-rc.d script prevents starting or reloading services during image creation
 	printf '#!/bin/sh\nexit 101' > $SDCARD/usr/sbin/policy-rc.d
