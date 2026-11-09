@@ -1,0 +1,203 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR MIT)
+/*
+ * Copyright (c) 2026 TQ-Systems GmbH <linux@ew.tq-group.com>,
+ * D-82229 Seefeld, Germany.
+ * Author: Martin Schmiedel
+ */
+/dts-v1/;
+
+#include "imx93-tqma9352.dtsi"
+
+/{
+	model = "TQ-Systems i.MX93 TQMa9352 on LAVA-BMS mainboard";
+	compatible = "tq,imx93-tqma9352-lava-bms",
+		     "tq,imx93-tqma9352", "fsl,imx93";
+	chassis-type = "embedded";
+
+	chosen {
+		stdout-path = &lpuart3;
+	};
+
+	aliases {
+		eeprom0 = &eeprom0;
+		ethernet0 = &eqos;
+		rtc0 = &pcf85063;
+		rtc1 = &bbnsm_rtc;
+	};
+};
+
+&gpio2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio2>;
+
+	/* BMS1..BMS17: analog-switched signals, plain SOC GPIOs from here */
+	gpio-line-names =
+		/* 00 */ "", "", "", "",
+		/* 04 */ "", "", "BMS1", "BMS2",
+		/* 08 */ "BMS3", "BMS4", "BMS5", "BMS6",
+		/* 12 */ "BMS7", "BMS8", "UART3_TX", "UART3_RX",
+		/* 16 */ "BMS9", "BMS10", "BMS11", "BMS12",
+		/* 20 */ "BMS13", "BMS14", "BMS15", "BMS16",
+		/* 24 */ "BMS17", "CAN2_TX", "", "",
+		/* 28 */ "", "", "", "";
+};
+
+&eqos {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_eqos>;
+	phy-mode = "rmii";
+	phy-handle = <&ethphy_eqos>;
+	status = "okay";
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy_eqos: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_eqos_phy>;
+			reset-gpios = <&gpio4 13 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <500000>;
+			reset-deassert-us = <50000>;
+		};
+	};
+};
+
+&lpuart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart3>;
+	status = "okay";
+};
+
+&usbotg1 {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usbotg2 {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usdhc2 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc2_hs>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-1 = <&pinctrl_usdhc2_uhs>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-2 = <&pinctrl_usdhc2_uhs>, <&pinctrl_usdhc2_gpio>;
+	cd-gpios = <&gpio3 0 GPIO_ACTIVE_LOW>;
+	vmmc-supply = <&reg_usdhc2_vmmc>;
+	bus-width = <4>;
+	no-sdio;
+	no-mmc;
+	disable-wp;
+	status = "okay";
+};
+
+&iomuxc {
+	/*
+	 * DP83825IRMQ, RMII, PHY is REF_CLK master. Reset on the otherwise
+	 * unused RGMII RD3 line (repurposed as plain GPIO), REF_CLK input
+	 * on the dedicated ENET_QOS_CLOCK_GENERATE_REF_CLK function of TD2.
+	 */
+	pinctrl_eqos: eqosgrp {
+		fsl,pins = <
+			/* PD | FSEL_2 | DSE X4 */
+			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x51e
+			/* SION | HYS | FSEL_2 | DSE X4 */
+			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x4000111e
+			/* HYS | FSEL_0 | DSE no drive */
+			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x1000
+			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x1000
+			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x1000
+			/* PD | FSEL_2 | DSE X4 */
+			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x51e
+			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x51e
+			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x51e
+			/* HYS | FSEL_0 | DSE no drive, external 50 MHz REF_CLK in */
+			MX93_PAD_ENET1_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK 0x1000
+		>;
+	};
+
+	/* BMS1..BMS17 analog-switch signals, plain GPIO2 inputs */
+	pinctrl_gpio2: gpio2grp {
+		fsl,pins = <
+			/* HYS | PD | FSEL_2 | DSE X4 */
+			MX93_PAD_GPIO_IO06__GPIO2_IO06			0x151e
+			MX93_PAD_GPIO_IO07__GPIO2_IO07			0x151e
+			MX93_PAD_GPIO_IO08__GPIO2_IO08			0x151e
+			MX93_PAD_GPIO_IO09__GPIO2_IO09			0x151e
+			MX93_PAD_GPIO_IO10__GPIO2_IO10			0x151e
+			MX93_PAD_GPIO_IO11__GPIO2_IO11			0x151e
+			MX93_PAD_GPIO_IO12__GPIO2_IO12			0x151e
+			MX93_PAD_GPIO_IO13__GPIO2_IO13			0x151e
+			MX93_PAD_GPIO_IO16__GPIO2_IO16			0x151e
+			MX93_PAD_GPIO_IO17__GPIO2_IO17			0x151e
+			MX93_PAD_GPIO_IO18__GPIO2_IO18			0x151e
+			MX93_PAD_GPIO_IO19__GPIO2_IO19			0x151e
+			MX93_PAD_GPIO_IO20__GPIO2_IO20			0x151e
+			MX93_PAD_GPIO_IO21__GPIO2_IO21			0x151e
+			MX93_PAD_GPIO_IO22__GPIO2_IO22			0x151e
+			MX93_PAD_GPIO_IO23__GPIO2_IO23			0x151e
+			MX93_PAD_GPIO_IO24__GPIO2_IO24			0x151e
+		>;
+	};
+
+	pinctrl_eqos_phy: eqosphygrp {
+		fsl,pins = <
+			/* FSEL_2 | DSE X4, PHY reset */
+			MX93_PAD_ENET1_RD3__GPIO4_IO13				0x011e
+		>;
+	};
+
+	pinctrl_uart3: uart3grp {
+		fsl,pins = <
+			/* HYS | FSEL_0 | No DSE */
+			MX93_PAD_GPIO_IO15__LPUART3_RX			0x1000
+			/* FSEL_2 | DSE X4 */
+			MX93_PAD_GPIO_IO14__LPUART3_TX			0x011e
+		>;
+	};
+
+	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
+		fsl,pins = <
+			/* HYS | FSEL_0 | No DSE */
+			MX93_PAD_SD2_CD_B__GPIO3_IO00			0x1000
+		>;
+	};
+
+	/* enable SION for data and cmd pad due to ERR052021 */
+	pinctrl_usdhc2_hs: usdhc2hsgrp {
+		fsl,pins = <
+			/* PD | FSEL_3 | DSE X5 */
+			MX93_PAD_SD2_CLK__USDHC2_CLK			0x05be
+			/* HYS | PU | FSEL_3 | DSE X4 */
+			MX93_PAD_SD2_CMD__USDHC2_CMD			0x4000139e
+			/* HYS | PU | FSEL_3 | DSE X3 */
+			MX93_PAD_SD2_DATA0__USDHC2_DATA0		0x4000138e
+			MX93_PAD_SD2_DATA1__USDHC2_DATA1		0x4000138e
+			MX93_PAD_SD2_DATA2__USDHC2_DATA2		0x4000138e
+			MX93_PAD_SD2_DATA3__USDHC2_DATA3		0x4000138e
+			/* FSEL_2 | DSE X3 */
+			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT		0x010e
+		>;
+	};
+
+	/* enable SION for data and cmd pad due to ERR052021 */
+	pinctrl_usdhc2_uhs: usdhc2uhsgrp {
+		fsl,pins = <
+			/* PD | FSEL_3 | DSE X6 */
+			MX93_PAD_SD2_CLK__USDHC2_CLK			0x05fe
+			/* HYS | PU | FSEL_3 | DSE X4 */
+			MX93_PAD_SD2_CMD__USDHC2_CMD			0x4000139e
+			MX93_PAD_SD2_DATA0__USDHC2_DATA0		0x4000139e
+			MX93_PAD_SD2_DATA1__USDHC2_DATA1		0x4000139e
+			MX93_PAD_SD2_DATA2__USDHC2_DATA2		0x4000139e
+			MX93_PAD_SD2_DATA3__USDHC2_DATA3		0x4000139e
+			/* FSEL_2 | DSE X3 */
+			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT		0x010e
+		>;
+	};
+};

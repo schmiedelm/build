@@ -1,0 +1,356 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR MIT)
+/*
+ * Copyright (c) 2026 TQ-Systems GmbH <linux@ew.tq-group.com>,
+ * D-82229 Seefeld, Germany.
+ * Author: Martin Schmiedel
+ */
+/dts-v1/;
+
+#include "imx93-tqma9352.dtsi"
+
+/{
+	model = "TQ-Systems i.MX93 TQMa9352 on LAVA-BMS mainboard";
+	compatible = "tq,imx93-tqma9352-lava-bms",
+		     "tq,imx93-tqma9352", "fsl,imx93";
+	chassis-type = "embedded";
+
+	chosen {
+		stdout-path = &lpuart3;
+	};
+
+	aliases {
+		eeprom0 = &eeprom0;
+		ethernet0 = &eqos;
+		gpio0 = &gpio1;
+		gpio1 = &gpio2;
+		gpio2 = &gpio3;
+		gpio3 = &gpio4;
+		i2c0 = &lpi2c1;
+		i2c1 = &lpi2c2;
+		i2c2 = &lpi2c3;
+		mmc0 = &usdhc1;
+		mmc1 = &usdhc2;
+		rtc0 = &pcf85063;
+		rtc1 = &bbnsm_rtc;
+		serial0 = &lpuart3;
+		serial1 = &lpuart6;
+	};
+};
+
+/*
+ * X601 expansion header: I2C1, I2C3, UART6, SPI6, CAN2, ADC_IN[0..3] and
+ * GPIO1.IO2/4/6/8/9/10/12/14 are routed there unpopulated, for manual
+ * extension. I2C1 is the SOM's own lpi2c1 - the same bus as the PMIC,
+ * EEPROM/VARD and on-module temperature sensor - it needs no separate
+ * enablement here, but anything wired to the header shares that bus.
+ */
+
+/* X601 header, ADC_IN[0..3] - standard reference, no on-board consumer */
+&adc1 {
+	status = "okay";
+};
+
+&gpio1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio1>;
+
+	gpio-line-names =
+		/* 00 */ "", "", "IO2", "PMIC_IRQ#",
+		/* 04 */ "IO4", "", "IO6", "",
+		/* 08 */ "IO8", "IO9", "IO10", "",
+		/* 12 */ "IO12", "", "IO14", "",
+		/* 16 */ "", "", "", "",
+		/* 20 */ "", "", "", "",
+		/* 24 */ "", "", "", "",
+		/* 28 */ "", "", "", "";
+};
+
+&gpio2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio2>;
+
+	/* BMS1..BMS18: analog-switched signals, plain SOC GPIOs from here */
+	gpio-line-names =
+		/* 00 */ "", "", "", "",
+		/* 04 */ "", "", "BMS1", "BMS2",
+		/* 08 */ "BMS3", "BMS4", "BMS5", "BMS6",
+		/* 12 */ "BMS7", "BMS8", "UART3_TX", "UART3_RX",
+		/* 16 */ "BMS9", "BMS10", "BMS11", "BMS12",
+		/* 20 */ "BMS13", "BMS14", "BMS15", "BMS16",
+		/* 24 */ "BMS17", "CAN2_TX", "BMS18", "",
+		/* 28 */ "", "", "", "";
+};
+
+&eqos {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_eqos>;
+	phy-mode = "rmii";
+	phy-handle = <&ethphy_eqos>;
+	/*
+	 * DP83825IRMQ is RMII Leader (own crystal, drives REF_CLK into
+	 * ENET1_TD2) - switches the MAC's REF_CLK source mux to the
+	 * external pin (see dwmac-imx.c imx93_set_intf_mode()).
+	 */
+	snps,rmii_refclk_ext;
+	status = "okay";
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy_eqos: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_eqos_phy>;
+			reset-gpios = <&gpio4 13 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <500000>;
+			reset-deassert-us = <50000>;
+		};
+	};
+};
+
+/* X601 header - plain logic-level TX/RX, no on-board transceiver */
+&flexcan2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2>;
+	status = "okay";
+};
+
+/* X601 header - free bus, no on-board devices */
+&lpi2c3 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <400000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c3>;
+	status = "okay";
+};
+
+/* X601 header - single PCS0, one test device */
+&lpspi6 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpspi6>, <&pinctrl_lpspi6_cs>;
+	cs-gpios = <&gpio2 0 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	spidev6_0: spidev6@0 {
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <5000000>;
+		status = "okay";
+	};
+};
+
+&lpuart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart3>;
+	status = "okay";
+};
+
+/* X601 header - free bus, no on-board devices */
+&lpuart6 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart6>;
+	status = "okay";
+};
+
+&usbotg1 {
+	dr_mode = "peripheral";
+	disable-over-current;
+	samsung,picophy-pre-emp-curr-control = <3>;
+	samsung,picophy-dc-vol-level-adjust = <7>;
+	status = "okay";
+};
+
+&usbotg2 {
+	dr_mode = "peripheral";
+	disable-over-current;
+	samsung,picophy-pre-emp-curr-control = <3>;
+	samsung,picophy-dc-vol-level-adjust = <7>;
+	status = "okay";
+};
+
+&usdhc2 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc2_hs>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-1 = <&pinctrl_usdhc2_uhs>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-2 = <&pinctrl_usdhc2_uhs>, <&pinctrl_usdhc2_gpio>;
+	cd-gpios = <&gpio3 0 GPIO_ACTIVE_LOW>;
+	vmmc-supply = <&reg_usdhc2_vmmc>;
+	bus-width = <4>;
+	no-sdio;
+	no-mmc;
+	disable-wp;
+	status = "okay";
+};
+
+&iomuxc {
+	/*
+	 * DP83825IRMQ, RMII, PHY is REF_CLK master. Reset on the otherwise
+	 * unused RGMII RD3 line (repurposed as plain GPIO), REF_CLK input
+	 * on the dedicated ENET_QOS_CLOCK_GENERATE_REF_CLK function of TD2.
+	 */
+	pinctrl_eqos: eqosgrp {
+		fsl,pins = <
+			/* PD | FSEL_2 | DSE X4 */
+			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x51e
+			/* SION | HYS | FSEL_2 | DSE X4 */
+			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x4000111e
+			/* HYS | FSEL_0 | DSE no drive */
+			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x1000
+			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x1000
+			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x1000
+			/* PD | FSEL_2 | DSE X4 */
+			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x51e
+			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x51e
+			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x51e
+			/* HYS | FSEL_0 | DSE no drive, external 50 MHz REF_CLK in */
+			MX93_PAD_ENET1_TD2__CCM_ENET_QOS_CLOCK_GENERATE_REF_CLK 0x1000
+		>;
+	};
+
+	pinctrl_eqos_phy: eqosphygrp {
+		fsl,pins = <
+			/* FSEL_2 | DSE X4, PHY reset */
+			MX93_PAD_ENET1_RD3__GPIO4_IO13				0x011e
+		>;
+	};
+
+	/* X601 header: IO2/4/6/8/9/10/12/14, plain GPIO1 inputs */
+	pinctrl_gpio1: gpio1grp {
+		fsl,pins = <
+			/* HYS | PD | FSEL_2 | DSE X4 */
+			MX93_PAD_I2C2_SCL__GPIO1_IO02			0x151e
+			MX93_PAD_UART1_RXD__GPIO1_IO04			0x151e
+			MX93_PAD_UART2_RXD__GPIO1_IO06			0x151e
+			MX93_PAD_PDM_CLK__GPIO1_IO08			0x151e
+			MX93_PAD_PDM_BIT_STREAM0__GPIO1_IO09		0x151e
+			MX93_PAD_PDM_BIT_STREAM1__GPIO1_IO10		0x151e
+			MX93_PAD_SAI1_TXC__GPIO1_IO12			0x151e
+			MX93_PAD_SAI1_RXD0__GPIO1_IO14			0x151e
+		>;
+	};
+
+	/* X601 header, plain logic-level TX/RX, no on-board transceiver */
+	pinctrl_flexcan2: flexcan2grp {
+		fsl,pins = <
+			/* HYS | PU | FSEL_0 | DSE no drive */
+			MX93_PAD_GPIO_IO27__CAN2_RX			0x1200
+			/* PU | FSEL_3 | DSE X4 */
+			MX93_PAD_GPIO_IO25__CAN2_TX			0x039e
+		>;
+	};
+
+	/* X601 header */
+	pinctrl_lpi2c3: lpi2c3grp {
+		fsl,pins = <
+			/* SION | HYS | OD | FSEL_3 | DSE X4 */
+			MX93_PAD_GPIO_IO28__LPI2C3_SDA			0x4000199e
+			MX93_PAD_GPIO_IO29__LPI2C3_SCL			0x4000199e
+		>;
+	};
+
+	/* X601 header, single PCS0 */
+	pinctrl_lpspi6: lpspi6grp {
+		fsl,pins = <
+			/* HYS | PD | FSEL_0 | DSE no drive */
+			MX93_PAD_GPIO_IO01__LPSPI6_SIN			0x1400
+			/* PD | FSEL_2 | DSE X4 */
+			MX93_PAD_GPIO_IO02__LPSPI6_SOUT			0x051e
+			MX93_PAD_GPIO_IO03__LPSPI6_SCK			0x051e
+		>;
+	};
+
+	pinctrl_lpspi6_cs: lpspi6csgrp {
+		fsl,pins = <
+			/* FSEL_2 | DSE X4 */
+			MX93_PAD_GPIO_IO00__GPIO2_IO00			0x011e
+		>;
+	};
+
+	/* X601 header */
+	pinctrl_uart6: uart6grp {
+		fsl,pins = <
+			/* HYS | FSEL_0 | No DSE */
+			MX93_PAD_GPIO_IO05__LPUART6_RX			0x1000
+			/* FSEL_2 | DSE X4 */
+			MX93_PAD_GPIO_IO04__LPUART6_TX			0x011e
+		>;
+	};
+
+	/* BMS1..BMS18 analog-switch signals, plain GPIO2 inputs */
+	pinctrl_gpio2: gpio2grp {
+		fsl,pins = <
+			/* HYS | PD | FSEL_2 | DSE X4 */
+			MX93_PAD_GPIO_IO06__GPIO2_IO06			0x151e
+			MX93_PAD_GPIO_IO07__GPIO2_IO07			0x151e
+			MX93_PAD_GPIO_IO08__GPIO2_IO08			0x151e
+			MX93_PAD_GPIO_IO09__GPIO2_IO09			0x151e
+			MX93_PAD_GPIO_IO10__GPIO2_IO10			0x151e
+			MX93_PAD_GPIO_IO11__GPIO2_IO11			0x151e
+			MX93_PAD_GPIO_IO12__GPIO2_IO12			0x151e
+			MX93_PAD_GPIO_IO13__GPIO2_IO13			0x151e
+			MX93_PAD_GPIO_IO16__GPIO2_IO16			0x151e
+			MX93_PAD_GPIO_IO17__GPIO2_IO17			0x151e
+			MX93_PAD_GPIO_IO18__GPIO2_IO18			0x151e
+			MX93_PAD_GPIO_IO19__GPIO2_IO19			0x151e
+			MX93_PAD_GPIO_IO20__GPIO2_IO20			0x151e
+			MX93_PAD_GPIO_IO21__GPIO2_IO21			0x151e
+			MX93_PAD_GPIO_IO22__GPIO2_IO22			0x151e
+			MX93_PAD_GPIO_IO23__GPIO2_IO23			0x151e
+			MX93_PAD_GPIO_IO24__GPIO2_IO24			0x151e
+			MX93_PAD_GPIO_IO26__GPIO2_IO26			0x151e
+		>;
+	};
+
+	pinctrl_uart3: uart3grp {
+		fsl,pins = <
+			/* HYS | FSEL_0 | No DSE */
+			MX93_PAD_GPIO_IO15__LPUART3_RX			0x1000
+			/* FSEL_2 | DSE X4 */
+			MX93_PAD_GPIO_IO14__LPUART3_TX			0x011e
+		>;
+	};
+
+	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
+		fsl,pins = <
+			/* HYS | FSEL_0 | No DSE */
+			MX93_PAD_SD2_CD_B__GPIO3_IO00			0x1000
+		>;
+	};
+
+	/* enable SION for data and cmd pad due to ERR052021 */
+	pinctrl_usdhc2_hs: usdhc2hsgrp {
+		fsl,pins = <
+			/* PD | FSEL_3 | DSE X5 */
+			MX93_PAD_SD2_CLK__USDHC2_CLK			0x05be
+			/* HYS | PU | FSEL_3 | DSE X4 */
+			MX93_PAD_SD2_CMD__USDHC2_CMD			0x4000139e
+			/* HYS | PU | FSEL_3 | DSE X3 */
+			MX93_PAD_SD2_DATA0__USDHC2_DATA0		0x4000138e
+			MX93_PAD_SD2_DATA1__USDHC2_DATA1		0x4000138e
+			MX93_PAD_SD2_DATA2__USDHC2_DATA2		0x4000138e
+			MX93_PAD_SD2_DATA3__USDHC2_DATA3		0x4000138e
+			/* FSEL_2 | DSE X3 */
+			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT		0x010e
+		>;
+	};
+
+	/* enable SION for data and cmd pad due to ERR052021 */
+	pinctrl_usdhc2_uhs: usdhc2uhsgrp {
+		fsl,pins = <
+			/* PD | FSEL_3 | DSE X6 */
+			MX93_PAD_SD2_CLK__USDHC2_CLK			0x05fe
+			/* HYS | PU | FSEL_3 | DSE X4 */
+			MX93_PAD_SD2_CMD__USDHC2_CMD			0x4000139e
+			MX93_PAD_SD2_DATA0__USDHC2_DATA0		0x4000139e
+			MX93_PAD_SD2_DATA1__USDHC2_DATA1		0x4000139e
+			MX93_PAD_SD2_DATA2__USDHC2_DATA2		0x4000139e
+			MX93_PAD_SD2_DATA3__USDHC2_DATA3		0x4000139e
+			/* FSEL_2 | DSE X3 */
+			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT		0x010e
+		>;
+	};
+};
