@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+Date: Sat, 14 Nov 2026 18:12:01 +0100
+Subject: [PATCH] phy: freescale: fsl-samsung-hdmi: fix deadlock with
+ clk_prepare_lock
+
+A hdmi_pclk rate change holds clk_prepare_lock and resumes the PHY
+through clk_pm_runtime_get(). The PHY runtime suspend calls
+clk_disable_unprepare() and also takes clk_prepare_lock. If the suspend
+runs at the same time, both tasks wait for each other.
+
+Seen on i.MX8MP on a HDMI mode change (1080p60 <-> 1080p23.976):
+
+  modetest: clk_set_rate() <- lcdif_crtc_atomic_enable()
+            clk_core_set_rate_nolock() -> clk_pm_runtime_get() -> rpm_resume()
+  kworker (pm_runtime_work): fsl_samsung_hdmi_phy_suspend()
+            -> clk_unprepare() -> clk_prepare_lock()
+
+All other clk users then block too (cpufreq, SDHCI runtime resume).
+
+Keep apbclk prepared from probe and only gate it in runtime PM.
+clk_enable() and clk_disable() do not take clk_prepare_lock.
+
+Signed-off-by: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+---
+ drivers/phy/freescale/phy-fsl-samsung-hdmi.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/phy/freescale/phy-fsl-samsung-hdmi.c b/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
+index 0f25d81..d6110c1 100644
+--- a/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
++++ b/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
+@@ -694,7 +694,11 @@ static int __maybe_unused fsl_samsung_hdmi_phy_suspend(struct device *dev)
+ {
+ 	struct fsl_samsung_hdmi_phy *phy = dev_get_drvdata(dev);
+ 
+-	clk_disable_unprepare(phy->apbclk);
++	/*
++	 * clk_disable() only: runtime suspend can run while a hdmi_pclk rate
++	 * change holds clk_prepare_lock and waits in clk_pm_runtime_get().
++	 */
++	clk_disable(phy->apbclk);
+ 
+ 	return 0;
+ }
+@@ -704,7 +708,7 @@ static int __maybe_unused fsl_samsung_hdmi_phy_resume(struct device *dev)
+ 	struct fsl_samsung_hdmi_phy *phy = dev_get_drvdata(dev);
+ 	int ret = 0;
+ 
+-	ret = clk_prepare_enable(phy->apbclk);
++	ret = clk_enable(phy->apbclk);
+ 	if (ret) {
+ 		dev_err(phy->dev, "failed to enable apbclk\n");
+ 		return ret;
