@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+Date: Wed, 25 Nov 2026 08:30:00 +0100
+Subject: [PATCH] phy: freescale: fsl-samsung-hdmi: keep runtime PM active
+
+A hdmi_pclk rate change holds clk_prepare_lock and resumes the PHY
+through clk_pm_runtime_get(). If the PHY suspends at the same time, the
+resume waits for the suspend. The suspend takes clk_prepare_lock in the
+PHY driver and in imx8mp_blk_ctrl_power_off(). Both tasks block.
+
+Keep the runtime PM reference from probe. The PHY no longer suspends at
+runtime. System suspend and resume still use the callbacks.
+
+Signed-off-by: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+---
+
+diff --git a/drivers/phy/freescale/phy-fsl-samsung-hdmi.c b/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
+index 191c282..8c823a9 100644
+--- a/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
++++ b/drivers/phy/freescale/phy-fsl-samsung-hdmi.c
+@@ -671,8 +671,11 @@
+ 		goto register_clk_failed;
+ 	}
+ 
+-	pm_runtime_put(phy->dev);
+-
++	/*
++	 * Keep the runtime PM reference: a hdmi_pclk rate change holds
++	 * clk_prepare_lock and would wait for a running suspend, which takes
++	 * clk_prepare_lock here and in the power domain.
++	 */
+ 	return 0;
+ 
+ register_clk_failed:
+@@ -682,6 +685,7 @@
+ static void fsl_samsung_hdmi_phy_remove(struct platform_device *pdev)
+ {
+ 	of_clk_del_provider(pdev->dev.of_node);
++	pm_runtime_put_noidle(&pdev->dev);
+ }
+ 
+ static int __maybe_unused fsl_samsung_hdmi_phy_suspend(struct device *dev)
