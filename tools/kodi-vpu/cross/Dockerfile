@@ -24,3 +24,11 @@ RUN dpkg --add-architecture arm64 \
 	&& apt-get remove -y libavcodec-dev:arm64 libavformat-dev:arm64 libavutil-dev:arm64 \
 		libswscale-dev:arm64 libswresample-dev:arm64 libavfilter-dev:arm64 libpostproc-dev:arm64 \
 	&& rm -rf /var/lib/apt/lists/*
+# moonlight-qt (separate layer, keeps the Kodi layer cached)
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		qt6-base-dev:arm64 qt6-declarative-dev:arm64 libqt6svg6-dev:arm64 \
+		qt6-base-dev-tools qt6-declarative-dev-tools \
+		libsdl2-dev:arm64 libsdl2-ttf-dev:arm64 libopus-dev:arm64 libssl-dev:arm64 \
+		libegl-dev:arm64 libgles-dev:arm64 \
+	&& rm -rf /var/lib/apt/lists/*

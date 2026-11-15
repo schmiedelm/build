@@ -251,7 +251,7 @@ Neu geplant:
   DRM (Widevine über `inputstream.adaptive` auf arm64), Hardware-Dekodierung der Streams über die VPU.
 - Spielen über Kodi, Emulatoren: RetroPlayer mit `game.libretro`-Cores als Binär-Add-ons (Cross-Build gegen die
   Kodi-22-Header), Controller-Zuordnung.
-- Spielen, Moonlight (Steam-Streaming vom PC): Moonlight-Client für arm64 mit Dekodierung über die VPU
+- Spielen, Moonlight (Steam-Streaming vom PC), Paket gebaut, Board-Test offen (Abschnitt 9): Moonlight-Client für arm64 mit Dekodierung über die VPU
   (H.264/HEVC, v4l2-request), Start aus Kodi heraus (Kodi beenden bzw. DRM-Master übergeben), Controller.
 
 Recherche 15.11.2026 (Status: **im Quelltext gelesen** bzw. **abgeleitet**, nichts auf dem Board geprüft):
@@ -274,3 +274,46 @@ Recherche 15.11.2026 (Status: **im Quelltext gelesen** bzw. **abgeleitet**, nich
   Overlay-Ebene (**abgeleitet**). Bau ohne X: `CONFIG+=embedded`, SDL mit KMSDRM, Qt `eglfs_kms`. Start: Kodi
   stoppen, Moonlight starten, danach Kodi neu starten (wie LibreELEC-Flatpak-Add-on). PC-Seite: Sunshine
   (oder Apollo) statt NVIDIA GameStream.
+
+## 9. Moonlight (Spiele-Streaming vom PC)
+
+Ziel: Moonlight startet aus Kodi, dekodiert per VPU und gibt danach Kodi zurück. Host auf dem PC: Sunshine.
+
+Quelle: `https://github.com/moonlight-stream/moonlight-qt/releases/download/v6.2.0/MoonlightSrc-6.2.0.tar.gz`,
+sha256 `217afac54e4f8734f3d97b32cb8c8b46b677e87f25b77c945343dd06f359e189` (**gemessen**; enthält die Submodule).
+Nach `<workdir>/src/` legen.
+
+Bau im Cross-Container (**gemessen**, 15.11.2026), braucht `/opt/kodi-ffmpeg` aus dem Schritt `ffmpeg`:
+```
+tools/kodi-vpu/cross/cross-build.sh ~/_work/kodi-cross moonlight
+tools/kodi-vpu/cross/cross-build.sh ~/_work/kodi-cross moonlight-deb
+```
+- `aarch64-linux-gnu-qmake6` (Debian-Qt 6.8.2), `CONFIG+=embedded`, `PREFIX=/opt/moonlight`, RUNPATH `/opt/kodi-ffmpeg/lib`.
+- Aktiv: `HAVE_DRM`, `HAVE_DRM_MASTER_HOOKS`, `HAVE_EGL`, `EMBEDDED_BUILD`. VAAPI/VDPAU/X11/Wayland sind mitgebaut
+  (Bibliotheken aus dem Kodi-build-dep), auf dem Board ungenutzt.
+- `pack-moonlight-deb.sh` → `moonlight-vpu_6.2.0-tq3_arm64.deb`. Inhalt: `/opt/moonlight`, `/usr/bin/moonlight-vpu`
+  (Qt `eglfs_kms`), `moonlight-vpu.service` (`Conflicts=kodi-vpu.service`, startet Kodi per `ExecStopPost` neu),
+  `/etc/default/moonlight-vpu` (z. B. `AUDIODEV`), sudoers-Regel für `kodi`, Kodi-Add-on `script.moonlight-vpu`.
+- Test im arm64-Container unter qemu (**gemessen**): Installation zusammen mit tq7 ok, `ldd` ohne Lücken
+  (libavcodec aus `/opt/kodi-ffmpeg`), `visudo -c` ok, `moonlight --help` startet.
+
+Board (**gemessen**, 15.11.2026): tq1 brach nach 3 s mit SIGABRT ab (Journal leer: Moonlight loggt über einen
+eigenen Thread, die Zeilen gehen beim Abbruch verloren). Qt 6.8.2 eglfs_kms nimmt ohne Konfiguration die erste
+DRM-Karte (`devices.first()`, **im Quelltext gelesen**). tq2: `moonlight-vpu` wählt die Karte mit Connector und setzt
+`QT_QPA_EGLFS_KMS_CONFIG` (`hwcursor` aus). Mit tq2 ist die Moonlight-Oberfläche auf dem TV sichtbar.
+Koppeln mit Sunshine (Linux-PC) und Videowiedergabe ok (**gemessen**). Ton erst nach `SDL_AUDIODRIVER=alsa`,
+`AUDIODEV=plughw:CARD=audiohdmi,DEV=0` (Standard war die TLV320-Karte); ab tq3 Vorgabe in `/etc/default/moonlight-vpu`.
+VPU (**gemessen**, 15.11.2026): G1 (H.264) 52567 → 53341 → 54374 während des Streams, G2 unverändert (5499).
+Moonlight dekodiert H.264 über die VPU. HEVC (G2) noch **offen**: Codec in den Moonlight-Einstellungen auf HEVC stellen.
+
+Auf dem Board (**offen**):
+1. `apt install ./moonlight-vpu_6.2.0-tq3_arm64.deb`. Image: Paket liegt in `userpatches/overlay/kodi-vpu/`;
+   `InstallKodiVpu` installiert es mit und prüft `moonlight --help` (qemu-Test im Container **gemessen**, rc 0).
+2. Ohne Kodi testen: `systemctl start moonlight-vpu.service`, Log: `journalctl -u moonlight-vpu -f`.
+3. PC: Sunshine installieren; Moonlight zeigt beim Koppeln eine PIN, diese im Sunshine-Webinterface eingeben.
+4. VPU prüfen: `grep -E '38300000|38310000' /proc/interrupts` vor und während des Streams (H.264 → G1, HEVC → G2).
+   Statistik-Overlay in Moonlight: Strg+Alt+Shift+S.
+5. In Kodi: Add-ons → Meine Add-ons → Moonlight aktivieren und starten. Nach dem Beenden muss Kodi zurückkommen.
+
+Risiken (**abgeleitet**): LCDIF hat keine NV12-Ebene; Moonlight muss über EGL rendern (wie Kodi). Ton: SDL nimmt
+das ALSA-Standardgerät; falls stumm, `AUDIODEV` in `/etc/default/moonlight-vpu` setzen.

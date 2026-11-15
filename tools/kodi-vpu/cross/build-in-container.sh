@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Cross-build ffmpeg 9.0.2 (v4l2-request) and Kodi 22 for arm64 trixie.
 # Runs inside kodi-cross-arm64:trixie. /work holds src/, /opt is the output.
-# Usage: build-in-container.sh [ffmpeg|tools|kodi|debs|all]   (default: all)
+# Usage: build-in-container.sh [ffmpeg|tools|kodi|debs|moonlight|moonlight-deb|all]   (default: all)
+# moonlight needs /opt/kodi-ffmpeg and /work/src/MoonlightSrc-${MOONLIGHT_VERSION}.tar.gz.
 set -euo pipefail
 
 STEP="${1:-all}"
@@ -12,6 +13,7 @@ TRIPLET=aarch64-linux-gnu
 KODI_SRC="${BUILD}/xbmc-22.0rc2-Piers"
 NATIVE="${BUILD}/native"
 TOOLCHAIN="${BUILD}/toolchain-arm64.cmake"
+MOONLIGHT_VERSION=6.2.0
 export HOME=/work/home
 mkdir -p "${BUILD}" "${HOME}"
 
@@ -90,7 +92,28 @@ build_debs() {
 		bash /scripts/pack-debs.sh /work/out/debs
 }
 
-if [[ ! -d ${KODI_SRC} ]]; then
+# moonlight-qt against /opt/kodi-ffmpeg (v4l2request, DRM_PRIME), installed to /opt/moonlight.
+build_moonlight() {
+	local dir="${BUILD}/moonlight-${MOONLIGHT_VERSION}"
+	rm -rf "${dir}"
+	mkdir -p "${dir}"
+	tar -C "${dir}" -xzf "${SRC}/MoonlightSrc-${MOONLIGHT_VERSION}.tar.gz"
+	cd "${dir}"
+	export PKG_CONFIG_PATH=/opt/kodi-ffmpeg/lib/pkgconfig
+	aarch64-linux-gnu-qmake6 moonlight-qt.pro CONFIG+=embedded CONFIG+=release \
+		PREFIX=/opt/moonlight QMAKE_RPATHDIR+=/opt/kodi-ffmpeg/lib
+	make -j"${JOBS}"
+	rm -rf /opt/moonlight
+	make install INSTALL_ROOT=/
+	grep -q -- "-DHAVE_DRM" app/Makefile* || { echo "moonlight: DRM renderer missing" >&2; exit 1; }
+}
+
+build_moonlight_deb() {
+	DEB_HOST_ARCH=arm64 DEB_HOST_MULTIARCH="${TRIPLET}" DEB_HOST_GNU_TYPE="${TRIPLET}" \
+		bash /scripts/pack-moonlight-deb.sh /work/out/debs
+}
+
+if [[ ${STEP} != moonlight* && ! -d ${KODI_SRC} ]]; then
 	tar -C "${BUILD}" -xf "${SRC}/xbmc-22.0rc2-Piers.tar.gz"
 	for p in /scripts/cross/patches/*.patch; do
 		patch -d "${KODI_SRC}" -p1 --batch -i "${p}"
@@ -102,6 +125,8 @@ case "${STEP}" in
 	tools) build_tools ;;
 	kodi) build_kodi ;;
 	debs) build_debs ;;
+	moonlight) build_moonlight ;;
+	moonlight-deb) build_moonlight_deb ;;
 	all) build_ffmpeg && build_tools && build_kodi && build_debs ;;
 	*) echo "unknown step: ${STEP}" >&2; exit 1 ;;
 esac
