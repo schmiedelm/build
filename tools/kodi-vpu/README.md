@@ -251,7 +251,7 @@ Erledigt:
 - Fernbedienung geht direkt nach dem Booten mit `kodi-vpu` tq7 (bestätigt 15.11.2026).
 
 Neu geplant:
-- Fernsehen über Kodi (Zattoo): PVR-Add-on bzw. Plugin für Kodi 22 finden und für arm64 bauen. Zu klären:
+- Fernsehen über Kodi (Zattoo), läuft ohne DRM über die VPU, Widevine offen (Abschnitt 10): PVR-Add-on bzw. Plugin für Kodi 22 finden und für arm64 bauen. Zu klären:
   DRM (Widevine über `inputstream.adaptive` auf arm64), Hardware-Dekodierung der Streams über die VPU.
 - Spielen über Kodi, Emulatoren: RetroPlayer mit `game.libretro`-Cores als Binär-Add-ons (Cross-Build gegen die
   Kodi-22-Header), Controller-Zuordnung.
@@ -321,3 +321,45 @@ Auf dem Board (**offen**):
 
 Risiken (**abgeleitet**): LCDIF hat keine NV12-Ebene; Moonlight muss über EGL rendern (wie Kodi). Ton: SDL nimmt
 das ALSA-Standardgerät; falls stumm, `AUDIODEV` in `/etc/default/moonlight-vpu` setzen.
+
+## 10. Fernsehen: Zattoo
+
+Ziel: Live-TV von Zattoo in Kodi, Dekodierung über die VPU.
+
+Quellen (sha256 **gemessen**), nach `<workdir>/src/`:
+
+| Datei | URL | sha256 |
+|---|---|---|
+| `inputstream.adaptive-22.3.24-Piers.tar.gz` | `https://github.com/xbmc/inputstream.adaptive/archive/refs/tags/22.3.24-Piers.tar.gz` | `374403df391a6a6053667653dc9e032622da4ccdebc908c8ec1a3853b51e17c1` |
+| `pvr.zattoo-22.2.3-Piers.tar.gz` | `https://github.com/rbuehlma/pvr.zattoo/archive/refs/tags/22.2.3-Piers.tar.gz` | `0fb9f133124efa1e19b38fb7748e371295ed2d74c38b1b0ba907321a927a0a60` |
+| `script.module.inputstreamhelper-0.8.6.zip` | `https://mirrors.kodi.tv/addons/piers/script.module.inputstreamhelper/script.module.inputstreamhelper-0.8.6.zip` | `1571610fb4019530f2bde22e40cabc05e2f42e42cb149083e4fa2ba8442821b2` |
+
+Bau im Cross-Container (**gemessen**, 15.11.2026):
+```
+tools/kodi-vpu/cross/cross-build.sh ~/_work/kodi-cross addons
+tools/kodi-vpu/cross/cross-build.sh ~/_work/kodi-cross addons-deb
+```
+- Kodis `cmake/addons` mit eigenen Definitionen (`ADDONS` in `build-in-container.sh`) und `ADDON_SRC_PREFIX`.
+- Die Rezepte `sqlite3`/`tinyxml2` von pvr.zattoo werden entfernt: `configure` ohne `--host` baut für den Host.
+  Stattdessen Debians arm64-Bibliotheken.
+- Das Buildsystem installiert nach `ADDON_DEPENDS_PATH`; der Schritt kopiert die Add-on-Verzeichnisse nach
+  `/opt/kodi-addons`.
+- `pack-addon-debs.sh`: je Add-on ein Paket `kodi-vpu-<id>` unter `/opt/kodi-22`:
+  `kodi-vpu-inputstream-adaptive`, `kodi-vpu-pvr-zattoo`, `kodi-vpu-script-module-inputstreamhelper` (all).
+- Test im arm64-Container unter qemu (**gemessen**): Installation mit tq8 ok, `ldd` ohne Lücken. API-Versionen aus
+  den Kodi-22-Headern (z. B. `kodi.binary.instance.pvr` 9.2.0).
+
+Widevine (**im Quelltext gelesen**): `inputstreamhelper` 0.8.6 holt die arm64-CDM aus einem ChromeOS-Recovery-Image
+(`CHROMEOS_RECOVERY_ARM64_BNAMES`). Großer Download, Platz unter `/var/lib/kodi` nötig.
+
+Auf dem Board (**offen**):
+1. Die drei Pakete installieren.
+2. Kodi: Add-ons → Meine Add-ons: „InputStream Adaptive“, „InputStream Helper“ und „Zattoo PVR Client“ aktivieren.
+3. Zattoo-Einstellungen: Zugangsdaten, Anbieter, zuerst „DRM Level“ = „Disable DRM“.
+Board (**gemessen**, 15.11.2026): erster Start ohne Zugangsdaten: „EPG-DB: Can't open database“ (Verzeichnis
+`addon_data/pvr.zattoo` fehlte noch). Nach dem Speichern der Zugangsdaten: „pvr.zattoo returned bad status
+"Not implemented" during instance creation“. Nach einem Kodi-Neustart behoben: Zattoo läuft (**gemessen**).
+VPU (**gemessen**, ohne DRM): G1 3523 → 4024 in 10 s (≈ 50/s, H.264 mit 50 Hz), G2 0;
+Log `CDVDVideoCodecDRMPRIME::Open - using decoder H.264`. Widevine **offen**.
+4. Sender öffnen; VPU über `/proc/interrupts` prüfen, Log `/var/lib/kodi/.kodi/temp/kodi.log` (`DRMPRIME`).
+5. Danach Widevine über „InputStream Helper“ installieren und „DRM Level“ = Auto testen.
