@@ -125,7 +125,11 @@ PAI) fehlte, weil drei Kernel-Optionen aus waren (**im Quelltext gelesen**): `CO
 ergänzt (Position wie `savedefconfig`). Board (**gemessen**, 15.11.2026): Karte `audio-hdmi` vorhanden, Ton über
 HDMI in Kodi nach Umstellen des Audioausgabegeräts ok.
 Ab `kodi-vpu` tq8: `/etc/alsa/conf.d/50-kodi-vpu-hdmi.conf` setzt `audiohdmi` als ALSA-Standardgerät (`plug` auf
-`hw:CARD=audiohdmi,DEV=0`). Kodi wählt beim ersten Start `ALSA:@` (= default), ein vorhandenes `guisettings.xml` bleibt.
+`hw:CARD=audiohdmi,DEV=0`). Board (**gemessen**): Kodi stellte trotzdem von `Default` auf
+`sysdefault:CARD=tqmba8mpras314` um. Ursache (**im Quelltext gelesen**, `CActiveAESink::ValidateOuputDevice`): `Default`
+hat keinen Treiber, Kodi nimmt das erste Gerät mit „default“ im Namen; `@` passt nicht. Ab tq9:
+`cross/patches/0005-settings-audiodevice-default-alsa.patch` setzt den Standard auf `ALSA:@` (**offen** auf dem Board).
+Vorhandene Profile: einmal „Default (audio-hdmi …)“ in den Audioeinstellungen wählen.
 
 ## 5. Messung (unabhängiger Beweis über den Kernel)
 

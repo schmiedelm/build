@@ -1,0 +1,15 @@
+Use the ALSA default device as audio output by default. With "Default"
+(no driver) Kodi picks the first device named *default*, i.e.
+sysdefault of the first card, not the ALSA default device.
+
+--- a/system/settings/settings.xml	2026-11-15 13:35:30.754032266 +0100
++++ b/system/settings/settings.xml	2026-11-15 13:35:30.762032257 +0100
+@@ -3385,7 +3385,7 @@
+       <group id="1" label="14250">
+         <setting id="audiooutput.audiodevice" type="string" label="545" help="36371">
+           <level>0</level>
+-          <default>Default</default> <!-- will be properly set on startup -->
++          <default>ALSA:@</default> <!-- ALSA default device (kodi-vpu: HDMI) -->
+           <constraints>
+             <options>audiodevices</options>
+           </constraints>

@@ -18,7 +18,7 @@
 set -euo pipefail
 
 FFMPEG_VERSION="9.0.2-tq2"
-KODI_VERSION="22.0~rc2-tq8"
+KODI_VERSION="22.0~rc2-tq9"
 ARCH="${DEB_HOST_ARCH:-$(dpkg --print-architecture)}"
 OUT="$(realpath -m "${1:-./debs}")"
 WORK="$(mktemp -d)"
