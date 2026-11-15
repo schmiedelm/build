@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+Date: Sat, 14 Nov 2026 21:29:01 +0100
+Subject: [PATCH] arm64: dts: imx8mp-tqma8mpql-mba8mp-ras314: enable Schmitt
+ trigger on HDMI CEC
+
+CEC is an open-drain bus with slow edges. Without hysteresis the
+HDMI_CEC input sees extra edges, and transmits fail at once with an
+initiator error.
+
+Enable the Schmitt trigger on the HDMI_CEC pad.
+
+Tested with cec-ctl, 30 messages to the TV for each pad setting:
+0x30 had 3 errors, 0xb0 (Schmitt trigger) had none.
+
+Signed-off-by: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+---
+ .../arm64/boot/dts/freescale/imx8mp-tqma8mpql-mba8mp-ras314.dts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/freescale/imx8mp-tqma8mpql-mba8mp-ras314.dts b/arch/arm64/boot/dts/freescale/imx8mp-tqma8mpql-mba8mp-ras314.dts
+index 06c865c..0d0edd1 100644
+--- a/arch/arm64/boot/dts/freescale/imx8mp-tqma8mpql-mba8mp-ras314.dts
++++ b/arch/arm64/boot/dts/freescale/imx8mp-tqma8mpql-mba8mp-ras314.dts
+@@ -704,7 +704,7 @@
+ 		fsl,pins = <MX8MP_IOMUXC_HDMI_DDC_SCL__HDMIMIX_HDMI_SCL	0x400001c2>,
+ 			   <MX8MP_IOMUXC_HDMI_DDC_SDA__HDMIMIX_HDMI_SDA	0x400001c2>,
+ 			   <MX8MP_IOMUXC_HDMI_HPD__HDMIMIX_HDMI_HPD	0x40000010>,
+-			   <MX8MP_IOMUXC_HDMI_CEC__HDMIMIX_HDMI_CEC	0x40000030>;
++			   <MX8MP_IOMUXC_HDMI_CEC__HDMIMIX_HDMI_CEC	0x400000b0>;
+ 	};
+ 
+ 	pinctrl_gpt1: gpt1grp {
