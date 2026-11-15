@@ -1,0 +1,23 @@
+CEC defaults: playback device, wake no device. Playback is claimed more
+reliably than recording on i.MX8MP.
+
+--- a/system/peripherals.xml	2026-11-14 23:36:19.550044252 +0100
++++ b/system/peripherals.xml	2026-11-14 23:36:19.562044483 +0100
+@@ -11,7 +11,7 @@
+   <peripheral bus="cec" name="CEC Adapter" mapTo="cec">
+     <setting key="enabled" type="bool" value="1" label="305" order="1" />
+     <setting key="activate_source" type="bool" value="1" label="36020" order="2" />
+-    <setting key="wake_devices" type="enum" value="36037" label="36007" lvalues="36037|36038|36039|231" order="3" />
++    <setting key="wake_devices" type="enum" value="231" label="36007" lvalues="36037|36038|36039|231" order="3" />
+     <setting key="standby_devices" type="enum" value="36037" label="36008" lvalues="36037|36038|36039|231" order="4" />
+     <setting key="send_inactive_source" type="bool" value="1" label="36025" order="5" />
+     <setting key="cec_standby_screensaver" type="bool" value="0" label="36009" configurable="0" />
+@@ -35,7 +35,7 @@
+     <setting key="double_tap_timeout_ms" type="int" min="0" max="1000" step="50" value="0" label="36054" order="17" />
+     <setting key="button_repeat_rate_ms" type="int" min="0" max="250" step="10" value="0" label="36048" order="18" />
+     <setting key="button_release_delay_ms" type="int" min="0" max="500" step="50" value="0" label="36049" order="19" />
+-    <setting key="device_type" type="enum" value="36051" label="36013" lvalues="36051|36052|36053" order="20" />
++    <setting key="device_type" type="enum" value="36052" label="36013" lvalues="36051|36052|36053" order="20" />
+     <setting key="appearance" type="addon" addontype="kodi.game.controller" value="game.controller.cec.adapter" configurable="0"/>
+   </peripheral>
+ 

@@ -1,0 +1,30 @@
+CEC: stop waiting for the TV power status after about 10 s.
+Some TVs (seen: Vestel) do not use logical address 0. Kodi then waited
+forever in WaitReady() and dropped all CEC keys.
+
+--- a/xbmc/peripherals/devices/PeripheralCecAdapter.cpp	2026-11-14 23:36:19.554044326 +0100
++++ b/xbmc/peripherals/devices/PeripheralCecAdapter.cpp	2026-11-14 23:36:19.562044483 +0100
+@@ -1719,14 +1719,21 @@
+ 
+   cec_power_status powerStatus(CEC_POWER_STATUS_UNKNOWN);
+   bool bContinue(true);
+-  while (bContinue && !m_adapter->m_bStop && !m_bStop && powerStatus != CEC_POWER_STATUS_ON)
++  // give up after about 10 s: some TVs do not use logical address 0 and never report "on"
++  for (int i = 0; i < 10 && bContinue && !m_adapter->m_bStop && !m_bStop &&
++                  powerStatus != CEC_POWER_STATUS_ON;
++       ++i)
+   {
+     powerStatus = m_adapter->m_cecAdapter->GetDevicePowerStatus(waitFor);
+     if (powerStatus != CEC_POWER_STATUS_ON)
+       bContinue = !m_event.Wait(1000ms);
+   }
+ 
+-  return powerStatus == CEC_POWER_STATUS_ON;
++  if (powerStatus != CEC_POWER_STATUS_ON)
++    CLog::Log(LOGWARNING, "{} - device {} did not report power on, continuing", __FUNCTION__,
++              static_cast<int>(waitFor));
++
++  return bContinue && !m_adapter->m_bStop && !m_bStop;
+ }
+ 
+ void CPeripheralCecAdapterUpdateThread::UpdateMenuLanguage(void)

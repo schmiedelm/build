@@ -1,0 +1,14 @@
+Enable the DRM PRIME decoder by default. Without it, Kodi decodes in software
+and the Hantro VPU stays idle.
+
+--- a/system/settings/linux.xml	2026-11-13 07:57:45.642613596 +0100
++++ b/system/settings/linux.xml	2026-11-13 07:57:45.646613654 +0100
+@@ -177,7 +177,7 @@
+           <requirement>HAS_GLES</requirement>
+           <visible>false</visible>
+           <level>2</level>
+-          <default>false</default>
++          <default>true</default>
+           <control type="toggle" />
+         </setting>
+         <setting id="videoplayer.useprimedecoderforhw" type="boolean" parent="videoplayer.useprimedecoder" label="13438" help="36172">
