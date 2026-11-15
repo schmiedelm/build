@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+Date: Sat, 14 Nov 2026 19:02:49 +0100
+Subject: [PATCH] ASoC: fsl-asoc-card: exclude S20_3LE and S24_LE for
+ tlv320aic32x4
+
+The tlv320aic32x4 is bit clock and frame master. It sets word length
+and BCLK from params_physical_width(): 32 bit slots for S24_LE. SAI
+uses params_width() as slot width: 24 bit slots. The frame layouts do
+not match and S24_LE playback is loud noise.
+
+Exclude S20_3LE and S24_LE on SAI, as done for WM8960 and WM8962.
+S16_LE and S32_LE work.
+
+Tested on TQMa8MPxL/MBa8MP-RAS314 with speaker-test: S16_LE and S32_LE
+play a clean sine, S24_LE is noise at 44.1 and 48 kHz.
+
+Signed-off-by: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+---
+ sound/soc/fsl/fsl-asoc-card.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/sound/soc/fsl/fsl-asoc-card.c b/sound/soc/fsl/fsl-asoc-card.c
+index 310ee4c..555f280 100644
+--- a/sound/soc/fsl/fsl-asoc-card.c
++++ b/sound/soc/fsl/fsl-asoc-card.c
+@@ -715,6 +715,12 @@ static const struct fsl_asoc_card_pdata fsl_asoc_sgtl5000_pdata = {
+ static const struct fsl_asoc_card_pdata fsl_asoc_tlv320aic32x4_pdata = {
+ 	.codec_dai_name  = "tlv320aic32x4-hifi",
+ 	.dai_fmt         = DAI_FMT_BASE | SND_SOC_DAIFMT_CBP_CFP,
++	/*
++	 * The codec sizes its slots by the physical width (32 bit for
++	 * S24_LE), SAI by the sample width (24 bit). The frames do not
++	 * match and playback is noise.
++	 */
++	.exclude_format  = SNDRV_PCM_FMTBIT_S20_3LE | SNDRV_PCM_FMTBIT_S24_LE,
+ 	.dapm_routes     = audio_map,
+ 	.num_dapm_routes = ARRAY_SIZE(audio_map),
+ };
