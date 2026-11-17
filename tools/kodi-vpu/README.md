@@ -411,4 +411,8 @@ Board (**gemessen**, 15.11.2026): erster Start ohne Zugangsdaten: „EPG-DB: Can
 VPU (**gemessen**, ohne DRM): G1 3523 → 4024 in 10 s (≈ 50/s, H.264 mit 50 Hz), G2 0;
 Log `CDVDVideoCodecDRMPRIME::Open - using decoder H.264`. Widevine **offen**.
 4. Sender öffnen; VPU über `/proc/interrupts` prüfen, Log `/var/lib/kodi/.kodi/temp/kodi.log` (`DRMPRIME`).
+Neues Image (**gemessen**, 15.11.2026): Nach Einrichten und hartem Neustart war `addon_data/pvr.zattoo/settings.xml`
+0 Byte (leerer Einstellungsdialog), ebenso `resource.language.de_de/addon.xml`. Vermutung (**abgeleitet**): ext4 mit
+`commit=600` hatte die Daten noch nicht geschrieben. Abhilfe: leere Dateien löschen, neu einrichten, `sync` oder
+`reboot` statt Strom aus.
 5. Danach Widevine über „InputStream Helper“ installieren und „DRM Level“ = Auto testen.
