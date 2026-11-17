@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+Date: Mon, 16 Nov 2026 19:22:12 +0100
+Subject: [PATCH] drm/bridge: dw-hdmi-cec: restart transmit after ERROR_INIT
+
+On i.MX8MP the controller sometimes ends a transmit with ERROR_INIT
+before the start bit is complete. The CEC core retries at once and all
+attempts fail within about 1 ms. Logical address polls then fail and the
+adapter stays unregistered, so the TV sends no remote control keys.
+
+The condition clears after 10 to 120 ms. Restart the transmit after
+10 ms, at most 50 times, before reporting an error.
+
+Signed-off-by: Martin Schmiedel <Martin.Schmiedel@tq-group.com>
+---
+ drivers/gpu/drm/bridge/synopsys/dw-hdmi-cec.c | 23 ++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/bridge/synopsys/dw-hdmi-cec.c b/drivers/gpu/drm/bridge/synopsys/dw-hdmi-cec.c
+index 9549dab..edf3f61 100644
+--- a/drivers/gpu/drm/bridge/synopsys/dw-hdmi-cec.c
++++ b/drivers/gpu/drm/bridge/synopsys/dw-hdmi-cec.c
+@@ -4,6 +4,7 @@
+  *
+  * Copyright (C) 2015-2017 Russell King.
+  */
++#include <linux/delay.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+ #include <linux/module.h>
+@@ -18,6 +19,14 @@
+ 
+ #include "dw-hdmi-cec.h"
+ 
++/*
++ * The controller sometimes ends a transmit at once with ERROR_INIT, before
++ * the start bit is complete. The condition clears within some ten ms.
++ * Restart the transmit after a delay instead of failing the attempt.
++ */
++#define DW_HDMI_CEC_INIT_RETRY_MS	10
++#define DW_HDMI_CEC_INIT_RETRIES	50
++
+ enum {
+ 	HDMI_IH_CEC_STAT0	= 0x0106,
+ 	HDMI_IH_MUTE_CEC_STAT0	= 0x0186,
+@@ -62,6 +71,8 @@ struct dw_hdmi_cec {
+ 	bool rx_done;
+ 	struct cec_notifier *notify;
+ 	int irq;
++	unsigned int tx_ctrl;
++	unsigned int tx_init_retries;
+ 
+ 	u8 regs_polarity;
+ 	u8 regs_mask;
+@@ -116,6 +127,8 @@ static int dw_hdmi_cec_transmit(struct cec_adapter *adap, u8 attempts,
+ 		dw_hdmi_write(cec, msg->msg[i], HDMI_CEC_TX_DATA0 + i);
+ 
+ 	dw_hdmi_write(cec, msg->len, HDMI_CEC_TX_CNT);
++	cec->tx_ctrl = ctrl;
++	cec->tx_init_retries = 0;
+ 	dw_hdmi_write(cec, ctrl | CEC_CTRL_START, HDMI_CEC_CTRL);
+ 
+ 	return 0;
+@@ -181,7 +194,15 @@ static irqreturn_t dw_hdmi_cec_thread(int irq, void *data)
+ 
+ 	if (cec->tx_done) {
+ 		cec->tx_done = false;
+-		cec_transmit_attempt_done(adap, cec->tx_status);
++		if (cec->tx_status == CEC_TX_STATUS_ERROR &&
++		    cec->tx_init_retries < DW_HDMI_CEC_INIT_RETRIES) {
++			cec->tx_init_retries++;
++			msleep(DW_HDMI_CEC_INIT_RETRY_MS);
++			dw_hdmi_write(cec, cec->tx_ctrl | CEC_CTRL_START,
++				      HDMI_CEC_CTRL);
++		} else {
++			cec_transmit_attempt_done(adap, cec->tx_status);
++		}
+ 	}
+ 	if (cec->rx_done) {
+ 		cec->rx_done = false;
+-- 
+2.47.3
+
