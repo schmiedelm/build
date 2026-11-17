@@ -193,6 +193,55 @@ aber 65–111 `Error` (Schmitt-Werte 65–72, ohne Schmitt 91–95, langsame Fla
 nur `Error`. Also meldet `ERROR_INIT`, dass die Leitung nach dem Freigeben noch low ist. Verdacht (**abgeleitet**):
 zu schwacher Pull-up auf der SoC-Seite bzw. Pegelwandler verlangsamt den Anstieg. Nächster Schritt: CEC-Pfad im
 Schaltplan, Oszilloskop auf SoC- und HDMI-Seite.
+Oszilloskop (**gemessen**, 16.11.2026, TDS2022C, 20 µs/Sample, Messpunkt HDMI-Stecker Pin 13, `tools/ALL0003/`): Pegel High 3,33 V,
+Low ≈ 0,04 V. Anstieg 0 → 2,4–2,9 V innerhalb eines Samples (< 20 µs), 3,16 V nach ≈ 60 µs; Abfall < 20 µs (Grenze laut
+Spezifikation: Anstieg 250 µs). Timing nach Spezifikation: Startbit 3,72/0,82 ms, Bit 0 1,54/0,90 ms, Bit 1 0,62/1,82 ms.
+Rahmen dekodiert: `0100 0100 EOM=1 ACK=1` = Poll von LA 4 an LA 4, nicht bestätigt (NACK = Adresse frei).
+7,36 ms später derselbe Header erneut (3 Bitzeiten = Wartezeit für eine Wiederholung). Deutung (**abgeleitet**): Der
+Kern hat wiederholt, also meldete der Treiber für einen elektrisch sauberen NACK-Rahmen einen Fehler statt NACK.
+Damit ist der Verdacht „langsamer Anstieg“ an diesem Messpunkt widerlegt. Nächster Schritt: SoC- und HDMI-Seite
+gleichzeitig (CH1/CH2), Kernel-Status je Rahmen mitschreiben (`cec`-Debug), Zeitpunkt des `Tx, Error` zuordnen.
+Treiber (**im Quelltext gelesen**, `dw-hdmi-cec.c`, Hardirq): `CEC_STAT_ERROR_INIT` wird vor `DONE` und `NACK` geprüft.
+Setzt der Controller bei einem NACK zusätzlich `ERROR_INIT`, meldet der Treiber `ERROR`. Prüfung: `cec-stat-debug/`
+(Treiber mit `trace_printk` des rohen Status, Bau auf dem Board gegen die Header aus `output/debs/`; Bau unter qemu
+**gemessen**). Board-Trace (**gemessen**, 16.11.2026, `cec-pad-test.sh` an LA 14, ≈ 61 Nachrichten):
+- Kein `0x14`: NACK und ERROR_INIT kommen nie zusammen. Die Vermutung „Treiber verwechselt NACK“ ist widerlegt.
+- ≈ 2/3 der Nachrichten: 4 Versuche mit `stat 0x04` (NACK) im Abstand von ≈ 34 ms (= Header gesendet, nicht
+  bestätigt). Der TV bestätigt LA 14 derzeit nicht; deshalb 30/30 Fehler bei jedem Pad-Wert.
+- ≈ 1/3 der Nachrichten: `stat 0x11` (DONE + ERROR_INIT) 0,07–7,5 ms nach dem Start, alle 4 Versuche innerhalb
+  von ≈ 1 ms. Das ist kürzer als ein Startbit (4,5 ms): Der Controller bricht im Startbit ab. Am HDMI-Stecker kann
+  so ein Abbruch nur als verkürzter Low-Puls sichtbar sein.
+- Deutung (**abgeleitet**): Der Controller liest während des eigenen Startbits einen falschen Pegel. Verdacht auf
+  den Eingangspfad SoC-seitig (Pegelwandler/Schutzbaustein). Nächster Schritt: SoC-Pin messen, Trigger auf
+  Low-Puls kürzer als 3,6 ms.
+- Mit eingeschaltetem TV (**gemessen**): TV jetzt unter LA 0 (vorher LA 14), Board LA 4. Nach einem
+  HDMI-Quellenwechsel nur noch LA 15 (Unregistered), die Fernbedienung geht nicht. Kette (**abgeleitet**): sofortige
+  `0x11`-Abbrüche bei den Polls → der Kern überspringt die Adressen → Unregistered → der TV schickt keine Tasten.
+- Wächter für Messungen abschalten: `systemctl mask --runtime --now kodi-vpu-cec-watch.service`.
+- Trace mit Quellenwechseln (**gemessen**, `tools/ALL0003/cec-hpd.trace`): 52× DONE, 73× EOM, 12× NACK, 278× `0x11`.
+  Die `0x11` kommen in Schüben; im Schub scheitert jede Nachricht sofort (Polls, Kodi-Broadcasts, `cec-ctl`).
+  Ein Schub endet nach dem nächsten Empfang (EOM). Im EOM-Zweig schreibt der Treiber `HDMI_CEC_LOCK = 0`.
+  Verdacht (**abgeleitet**): Ein Rahmen sperrt den Empfangspuffer ohne EOM (z. B. Follower-Fehler, `ERROR_FOLL`
+  ist maskiert); solange `LOCK` gesetzt ist, bricht jedes Senden ab. Prüfung: `cec-stat-debug` Fassung 2
+  (`lock` im Trace, `ERROR_FOLL` sichtbar, Parameter `fix_lock`).
+- Fassung 2 auf dem Board (**gemessen**, `cec-a.trace`, `cec-b.trace`): `lock` beim Senden immer 0, `lock 1` nur bei
+  EOM, kein `ERROR_FOLL`, `fix_lock` ohne Wirkung (158× `0x11`). Verdacht „Empfangssperre“ widerlegt.
+  Abstand `0x11` → nächstes EOM: Median 65 ms, aber nicht immer < 400 ms. Rahmen zwischen anderen Geräten sind
+  im Trace unsichtbar; „Bus belegt“ bleibt möglich (**offen**).
+- Fassung 3: Parameter `retry_ms`/`retry_max`. Bei `ERROR_INIT` wartet der IRQ-Thread `retry_ms` und setzt
+  `CEC_CTRL_START` erneut (wie der ursprüngliche Treiber von 2017), statt sofort `ERROR` zu melden. Bau unter qemu
+  **gemessen**, Board **offen**.
+- Beobachtung Nutzer (16.11.2026): Ab- und Anstecken des HDMI-Kabels bringt die Fernbedienung zurück. Deutung
+  (**abgeleitet**): Hotplug → neue Anmeldung mit Polls; gelingt sie, LA 4. Auf LA 15 bleibt das Board bis zum
+  nächsten Hotplug.
+- Fassung 3 mit `retry_ms=10` (**gemessen**, 16.11.2026): 65 Versuche mit Neustarts, alle enden mit OK (`0x1`) oder
+  NACK (`0x4`), keiner mit Error. 1–12 Neustarts (10–120 ms), am häufigsten 4 (≈ 40 ms). Der Zustand ist also kurz.
+  Trace `cec-c.trace`: 2069× `0x11` vor dem ersten Neustart (vor `retry_ms=10`), danach 298× `0x11` und 299 Neustarts,
+  kein `0x11` ohne Neustart. Nach jedem Quellenwechsel/Umstecken LA 4 (`0x0010`) und Fernbedienung ok.
+  Ergebnis: verzögerter Neustart nach `ERROR_INIT` behebt die Ausfälle.
+- Patch: `imx8m-6.18/0013-…` und `imx8m-7.3/0016-drm-bridge-dw-hdmi-cec-restart-transmit-after-ERROR_INIT.patch`
+  (10 ms, höchstens 50 Neustarts je Versuch). Mainline 7.4-rc3 ohne Korrektur. Bau unter qemu mit `W=1` ohne Warnung
+  (**gemessen**). Im Image **offen**. Danach `kodi-vpu-cec-watch` und `cross/patches/0004` (WaitReady) neu bewerten.
 ```
 mkdir -p userpatches/overlay/kodi-vpu && cp <workdir>/out/debs/*.deb userpatches/overlay/kodi-vpu/
 ```
@@ -241,8 +290,8 @@ Ablage der Pakete: nur lokal (`userpatches/overlay/kodi-vpu/`, Abschnitt 6). Kei
 ## 8. ToDo (Stand 15.11.2026)
 
 Offen aus dem bisherigen Stand:
-- CEC-Sendefehler: CEC-Pfad im RAS314-Schaltplan (Pull-ups, Pegelwandler), Oszilloskop auf SoC- und HDMI-Seite
-  (Abschnitt 6). Danach Pad-Wert (`0xb0` oder `0x1f0`) bzw. Hardware festlegen, Wächter-Dienst ggf. entfernen.
+- CEC-Sendefehler: Ursache gefunden (Abschnitt 6), Patch `dw-hdmi-cec` restart after ERROR_INIT. Im Image testen,
+  danach Wächter-Dienst entfernen und Upstream-PR vorbereiten.
 - HDMI-Stresstest `hdmi-mode-stress.sh` mit Patch 0012; danach Kodi-Patch 0002 (Bildwiederholrate) prüfen.
 - Upstream-PRs vorbereiten: Kernel 0012 (HDMI-PHY), 0013 (Audioformat), 0014 (CEC-Adresse), 0015 (CEC-Pad),
   Kernel-Config HDMI-Audio. 0014 und 0015 auch für `imx8m-6.18` klären.
